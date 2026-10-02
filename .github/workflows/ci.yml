@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  fmt:
+    name: terraform fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive -diff
+
+  validate:
+    name: validate (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - "."
+          - "modules/acm-certificate"
+          - "examples/simple"
+          - "examples/complete"
+          - "examples/with-certificate"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+
+      # No AWS credentials: -backend=false plus validate catches every type and reference
+      # error without touching an account. Real plan/apply tests belong in a separate,
+      # manually dispatched workflow.
+      - name: terraform init
+        working-directory: ${{ matrix.dir }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        working-directory: ${{ matrix.dir }}
+        run: terraform validate
+
+  tflint:
+    name: tflint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+      - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: tflint --recursive --format compact
+
+  security:
+    name: trivy config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned by commit SHA, not tag: the action's tags have been rewritten before (the
+      # unprefixed 0.x tags no longer exist), and a SHA cannot be moved.
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          trivy-config: ""
+
+  docs:
+    name: terraform-docs
+    runs-on: ubuntu-latest
+    # The same binary version and command used locally, so CI and a local run produce
+    # byte-identical READMEs. The terraform-docs/gh-actions container bundles its own
+    # older version and flags, which formats tables differently and fails the diff.
+    env:
+      TERRAFORM_DOCS_VERSION: v0.24.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install terraform-docs
+        run: |
+          curl -sSfL -o tfd.tgz "https://github.com/terraform-docs/terraform-docs/releases/download/${TERRAFORM_DOCS_VERSION}/terraform-docs-${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz"
+          tar -xzf tfd.tgz terraform-docs
+          sudo mv terraform-docs /usr/local/bin/
+          rm tfd.tgz
+
+      - name: Regenerate READMEs
+        run: |
+          for d in . modules/acm-certificate examples/simple examples/complete examples/with-certificate; do
+            terraform-docs markdown table --lockfile=false --output-file README.md --output-mode inject "$d"
+          done
+
+      - name: Fail if any README was stale
+        run: git diff --exit-code -- '*.md'

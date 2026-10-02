@@ -1,0 +1,13 @@
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!examples/**/*.tfvars.example
+crash.log
+crash.*.log
+.DS_Store
+
+# Per-user Claude Code settings
+.claude/settings.local.json

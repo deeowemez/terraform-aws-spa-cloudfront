@@ -1,0 +1,26 @@
+formatter: markdown table
+
+header-from: main.tf
+
+output:
+  file: README.md
+  mode: inject
+  template: |-
+    <!-- BEGIN_TF_DOCS -->
+    {{ .Content }}
+    <!-- END_TF_DOCS -->
+
+sort:
+  enabled: true
+  by: required
+
+settings:
+  anchor: true
+  default: true
+  description: true
+  lock: false
+  # Ignore local .terraform.lock.hcl (gitignored): CI has none, so reading it would
+  # print a pinned provider version locally and the constraint in CI, failing the diff.
+  lockfile: false
+  required: true
+  type: true

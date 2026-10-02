@@ -1,0 +1,20 @@
+# Each suppression here is a CALLER decision that the module exposes as a variable, not a
+# weakness in the module. Anything that is genuinely the module's responsibility should be
+# fixed rather than listed.
+
+# CloudFront access logging is not enabled by default.
+# Exposed as var.logging. Off by default because CloudFront's legacy logging_config
+# requires the target bucket to have ACLs enabled with BucketOwnerPreferred, which
+# conflicts with the BucketOwnerEnforced default AWS applies to new buckets — so the module
+# cannot turn it on without either creating a non-conforming bucket or failing.
+AVD-AWS-0010
+
+# CloudFront distribution does not have a WAF in front of it.
+# Exposed as var.web_acl_id. A WAFv2 ACL is an account-level resource with its own cost and
+# rule lifecycle; creating one per static site would be wrong.
+AVD-AWS-0011
+
+# S3 bucket does not have logging enabled.
+# Access logging on the origin bucket needs a caller-owned target bucket. CloudFront logs
+# are the useful signal for a site served through a distribution.
+AVD-AWS-0089
